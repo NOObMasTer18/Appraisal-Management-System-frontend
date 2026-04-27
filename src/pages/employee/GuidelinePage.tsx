@@ -1,11 +1,11 @@
-import { useState } from 'react'
+
 import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { RatingStars } from '../../components/RatingStars'
 import {
   BookOpen, CheckCircle, AlertCircle, Lightbulb,
-  Star, ChevronDown, ChevronUp, ArrowRight
+  Star, ArrowRight
 } from 'lucide-react'
  
 const tips = [
@@ -52,7 +52,7 @@ const steps = [
  
 export function GuidelinePage() {
   const navigate = useNavigate()
-  const [showTemplate, setShowTemplate] = useState(false)
+  
  
   return (
     <div className="max-w-5xl mx-auto space-y-10 pb-12">

@@ -56,9 +56,7 @@ export function Sidebar() {
 
   if (!user || !activeRole) return null
 
-  const toggleSection = (label: string) => {
-    setOpenSections(prev => ({ ...prev, [label]: !prev[label] }))
-  }
+  
 
   const links = activeRole === 'HR' ? hrLinks : activeRole === 'MANAGER' ? managerLinks : employeeLinks
 

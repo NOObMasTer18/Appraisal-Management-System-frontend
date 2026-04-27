@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+
+import { Card, CardContent} from '../../components/ui/card'
 import { RatingStars } from '../../components/RatingStars'
-import { BookOpen, ChevronDown, ChevronUp } from 'lucide-react'
+import { BookOpen } from 'lucide-react'
 
 const template = {
   whatWentWell: `I successfully led the migration of our authentication module to JWT-based security, completing it within the sprint timeline. I collaborated closely with the backend team to ensure zero downtime during the transition. I also mentored two junior developers on REST API best practices, which improved our team's code review turnaround by 30%.`,
@@ -15,7 +15,7 @@ const template = {
 }
 
 export function SampleAppraisalPage() {
-  const [showFull, setShowFull] = useState(true)
+  
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-12">
