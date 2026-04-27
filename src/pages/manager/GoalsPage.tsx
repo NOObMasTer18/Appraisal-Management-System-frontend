@@ -1,0 +1,171 @@
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { getTeamAppraisals } from '../../api/appraisals'
+import { getGoalsByAppraisal, createGoal, updateGoal, deleteGoal } from '../../api/goals'
+import { Card, CardContent } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Textarea } from '../../components/ui/textarea'
+import { Select } from '../../components/ui/select'
+
+import { Dialog } from '../../components/ui/dialog'
+import { format, isPast } from 'date-fns'
+import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { useAuth } from '../../context/AuthContext'
+import type { Goal } from '../../types'
+
+const goalStatusColor: Record<string, string> = {
+  NOT_STARTED: 'bg-slate-100 text-slate-700',
+  IN_PROGRESS: 'bg-blue-100 text-blue-700',
+  COMPLETED: 'bg-green-100 text-green-700',
+  CANCELLED: 'bg-red-100 text-red-700',
+}
+
+export function ManagerGoalsPage() {
+  const { user } = useAuth()
+  const qc = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<Goal | null>(null)
+  const [form, setForm] = useState({ appraisalId: '', title: '', description: '', dueDate: '', managerRemarks: '' })
+
+  const { data: appraisals = [] } = useQuery({
+    queryKey: ['team-appraisals', user?.id],
+    queryFn: () => getTeamAppraisals(user!.id),
+    enabled: !!user,
+  })
+
+  // Fetch goals for all team appraisals
+  const appraisalIds = appraisals.map(a => a.id)
+  const { data: allGoals = [] } = useQuery({
+    queryKey: ['all-team-goals', appraisalIds],
+    queryFn: async () => {
+      const results = await Promise.all(appraisalIds.map(id => getGoalsByAppraisal(id).catch(() => [])))
+      return results.flat()
+    },
+    enabled: appraisalIds.length > 0,
+  })
+
+  const openAdd = () => { setEditing(null); setForm({ appraisalId: '', title: '', description: '', dueDate: '', managerRemarks: '' }); setOpen(true) }
+  const openEdit = (g: Goal) => { setEditing(g); setForm({ appraisalId: String(g.appraisalId), title: g.title, description: g.description, dueDate: g.dueDate, managerRemarks: g.managerRemarks || '' }); setOpen(true) }
+
+  const save = useMutation({
+    mutationFn: () => editing
+      ? updateGoal(editing.id, user!.id, { title: form.title, description: form.description, dueDate: form.dueDate, managerRemarks: form.managerRemarks })
+      : createGoal(user!.id, { appraisalId: Number(form.appraisalId), title: form.title, description: form.description, dueDate: form.dueDate }),
+    onSuccess: () => { toast.success(editing ? 'Goal updated' : 'Goal created'); setOpen(false); qc.invalidateQueries({ queryKey: ['all-team-goals'] }) },
+    onError: () => toast.error('Failed to save goal'),
+  })
+
+  const remove = useMutation({
+    mutationFn: (id: number) => deleteGoal(id, user!.id),
+    onSuccess: () => { toast.success('Goal deleted'); qc.invalidateQueries({ queryKey: ['all-team-goals'] }) },
+    onError: () => toast.error('Failed to delete goal'),
+  })
+
+  const getAppraisalLabel = (id: number) => {
+    const a = appraisals.find(a => a.id === id)
+    return a ? `${a.employeeName} — ${a.cycleName}` : `Appraisal #${id}`
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Team Goals</h1>
+          <p className="text-slate-500 text-sm mt-1">Manage goals for your team members</p>
+        </div>
+        <Button onClick={openAdd} className="gap-2"><Plus size={16} />Add Goal</Button>
+      </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          {allGoals.length === 0 ? (
+            <p className="text-center text-slate-400 py-8">No goals yet. Add a goal for a team member.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="py-3 px-4 text-slate-500 font-medium">Employee / Cycle</th>
+                    <th className="py-3 px-4 text-slate-500 font-medium">Goal</th>
+                    <th className="py-3 px-4 text-slate-500 font-medium">Due Date</th>
+                    <th className="py-3 px-4 text-slate-500 font-medium">Manager Remarks</th>
+                    <th className="py-3 px-4 text-slate-500 font-medium whitespace-nowrap">Empl. Remarks</th>
+                    <th className="py-3 px-4 text-slate-500 font-medium">Status</th>
+                    <th className="py-3 px-4 text-slate-500 font-medium text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allGoals.map(g => (
+                    <tr key={g.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="py-3 px-4 text-slate-600 text-xs align-top">{getAppraisalLabel(g.appraisalId)}</td>
+                      <td className="py-3 px-4 align-top w-1/4">
+                        <p className="font-medium text-slate-900">{g.title}</p>
+                        <p className="text-xs text-slate-400 truncate max-w-[200px]">{g.description}</p>
+                      </td>
+                      <td className={`py-3 px-4 text-sm align-top whitespace-nowrap ${isPast(new Date(g.dueDate)) && g.status !== 'COMPLETED' ? 'text-red-600 font-medium' : 'text-slate-500'}`}>
+                        {format(new Date(g.dueDate), 'MMM d, yyyy')}
+                      </td>
+                      <td className="py-3 px-4 align-top">
+                        <p className="text-xs text-slate-600 line-clamp-3">{g.managerRemarks || <span className="italic text-slate-400">None</span>}</p>
+                      </td>
+                      <td className="py-3 px-4 align-top">
+                        <p className="text-xs text-slate-600 line-clamp-3">{g.employeeRemarks || <span className="italic text-slate-400">None</span>}</p>
+                      </td>
+                      <td className="py-3 px-4 align-top">
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${goalStatusColor[g.status]}`}>{g.status.replace('_', ' ')}</span>
+                      </td>
+                      <td className="py-3 px-4 align-top">
+                        <div className="flex gap-2 justify-center">
+                          <Button size="sm" variant="outline" onClick={() => openEdit(g)}><Pencil size={14} /></Button>
+                          <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => remove.mutate(g.id)}><Trash2 size={14} /></Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Goal' : 'Add Goal'}>
+          <form onSubmit={e => { e.preventDefault(); save.mutate() }} className="space-y-4">
+            {!editing && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Appraisal *</label>
+                <Select value={form.appraisalId} onChange={e => setForm(f => ({ ...f, appraisalId: e.target.value }))} required>
+                  <option value="">Select appraisal</option>
+                  {appraisals.map(a => <option key={a.id} value={a.id}>{a.employeeName} — {a.cycleName}</option>)}
+                </Select>
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Title *</label>
+              <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required placeholder="e.g. Complete React course" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+              <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Describe the goal..." />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Due Date *</label>
+              <Input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} required />
+            </div>
+            {editing && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Manager Remarks</label>
+                <Textarea value={form.managerRemarks} onChange={e => setForm(f => ({ ...f, managerRemarks: e.target.value }))} rows={2} placeholder="Add remarks or feedback..." />
+              </div>
+            )}
+            <div className="flex gap-3 justify-end pt-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving...' : 'Save Goal'}</Button>
+            </div>
+          </form>
+      </Dialog>
+    </div>
+  )
+}
