@@ -2,7 +2,10 @@ import axios from 'axios'
 
 const api = axios.create({
   baseURL: 'https://gumdrop-showing-malt.ngrok-free.dev', // Backend is running on 3000
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true'
+  },
 })
 
 api.interceptors.request.use((config) => {
